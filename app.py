@@ -80,6 +80,23 @@ def now_str():
 
 # === Flask + LINE API ===
 app = Flask(__name__)
+@app.get("/debug/write")
+def debug_write():
+    # 這個端點會直接寫一筆測試資料到你的試算表
+    try:
+        gc = gs_client()
+        ws = ensure_sheet(gc, SPREADSHEET_ID, SHEET_NAME)
+        ws.append_row(
+            [now_str(), "debug", "", "測試筆", 1, 2, 2, "from /debug/write", "—"],
+            value_input_option="USER_ENTERED"
+        )
+        return "ok: wrote a test row", 200
+    except Exception as e:
+        import traceback, io
+        buf = io.StringIO()
+        traceback.print_exc(file=buf)
+        return f"error: {e}\n\n{buf.getvalue()}", 500
+
 parser = WebhookParser(CHANNEL_SECRET)
 cfg = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 api_client = ApiClient(cfg)
