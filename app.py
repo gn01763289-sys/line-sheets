@@ -4,23 +4,22 @@ from flask import Flask, request, abort, jsonify
 from linebot.v3 import WebhookParser
 from linebot.v3.messaging import MessagingApi, Configuration, ApiClient
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.v3.exceptions import ApiException
 import gspread
 from google.oauth2.service_account import Credentials
 
-# === 環境變數 ===
+# ========= 環境變數 =========
 CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "")
 SHEET_NAME = os.getenv("SHEET_NAME", "records")
 TIMEZONE_HOURS = int(os.getenv("TIMEZONE_HOURS", "8"))
 SA_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-INTERNAL_SHIP_SECRET = os.getenv("INTERNAL_SHIP_SECRET", "").strip()  # 新增：Apps Script 內部密鑰
+INTERNAL_SHIP_SECRET = os.getenv("INTERNAL_SHIP_SECRET", "").strip()  # Apps Script 內部密鑰
 
 if not CHANNEL_SECRET or not CHANNEL_ACCESS_TOKEN or not SPREADSHEET_ID or not SA_JSON:
     raise RuntimeError("請在雲端後台設定：LINE_CHANNEL_SECRET、LINE_CHANNEL_ACCESS_TOKEN、SPREADSHEET_ID、GOOGLE_SERVICE_ACCOUNT_JSON")
 
-# === Google Sheets 連線 ===
+# ========= Google Sheets 連線 =========
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
           "https://www.googleapis.com/auth/drive"]
 
@@ -52,12 +51,12 @@ def ensure_sheet(gc, spreadsheet_id, sheet_name):
         ]])
     return ws
 
-# === 文字解析 ===
+# ========= 文字解析 =========
 ALIASES = {
-  "item": ["品項","項目","品名","item"],
-  "qty": ["數量","數目","qty","數"],
+  "item":  ["品項","項目","品名","item"],
+  "qty":   ["數量","數目","qty","數"],
   "price": ["單價","價格","價","price"],
-  "note": ["備註","備註說明","note"],
+  "note":  ["備註","備註說明","note"],
 }
 def norm(k):
     k=k.strip().lower()
@@ -91,7 +90,7 @@ def parse(text):
 def now_str():
     return datetime.now(timezone(timedelta(hours=TIMEZONE_HOURS))).strftime("%Y-%m-%d %H:%M:%S")
 
-# === Flask + LINE API ===
+# ========= Flask + LINE =========
 app = Flask(__name__)
 parser = WebhookParser(CHANNEL_SECRET)
 cfg = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
@@ -102,7 +101,7 @@ msg_api = MessagingApi(api_client)
 def healthz():
     return "ok", 200
 
-# 自我測試：直接寫一筆資料
+# 自我測試：直接寫一筆資料到表格
 @app.get("/debug/write")
 def debug_write():
     try:
@@ -119,7 +118,7 @@ def debug_write():
         traceback.print_exc(file=buf)
         return f"error: {e}\n\n{buf.getvalue()}", 500
 
-# LINE Webhook
+# LINE Webhook：解析訊息 → 寫入 Sheets → 回覆
 @app.post("/line/webhook")
 def webhook():
     sig = request.headers.get("X-Line-Signature","")
@@ -147,7 +146,7 @@ def webhook():
                         reply_token=ev.reply_token,
                         messages=[{"type":"text","text":"要記錄到雲端表格，請用：\n紀錄：品項=蘋果, 數量=10, 單價=50, 備註=特價"}]
                     )
-                except ApiException as e:
+                except Exception as e:
                     print("reply_message failed:", e)
                 continue
 
@@ -166,13 +165,13 @@ def webhook():
                         reply_token=ev.reply_token,
                         messages=[{"type":"text","text":f"✅ 已記錄\n品項：{data.get('item') or '-'}\n數量：{data.get('qty') or '-'}\n單價：{data.get('price') or '-'}\n備註：{data.get('note') or '-'}"}]
                     )
-                except ApiException as e:
+                except Exception as e:
                     print("reply_message failed:", e)
             except Exception as e:
                 print("寫入/回覆失敗:", e)
     return "OK"
 
-# === 出貨通知 API（給 Apps Script 呼叫） ===
+# 出貨通知 API（給 Apps Script 呼叫）
 @app.post("/ship/notify")
 def ship_notify():
     # 驗證密鑰（簡單保護）
